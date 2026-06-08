@@ -165,6 +165,12 @@ def _fill_table_data(page, report_data: dict):
 def fill_report(browser: Browser, config: dict) -> bool:
     page = browser.page
 
+    # 0. 切换中文界面（GitHub Actions 默认英文）
+    lang_btn = page.locator("button:has-text('English')")
+    if lang_btn.count():
+        lang_btn.first.click()
+        page.wait_for_timeout(1500)
+
     # 1. 导航菜单 → 阿米巴数据填报
     _nav_dropdown_click(page, "阿米巴数据填报")
 
