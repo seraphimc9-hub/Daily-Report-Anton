@@ -137,8 +137,13 @@ def _fill_table_data(page, report_data: dict):
             let inp = document.elementFromPoint(x, y);
             if (!inp) return {error: 'no element'};
             if (inp.tagName !== 'INPUT') {
-                const nearby = document.elementsFromPoint(x, y);
-                for (const n of nearby) { if (n.tagName === 'INPUT') { inp = n; break; } }
+                // 可能在 td/div 内部，向下查找 input
+                const inside = inp.querySelector('input');
+                if (inside) { inp = inside; }
+                else {
+                    const nearby = document.elementsFromPoint(x, y);
+                    for (const n of nearby) { if (n.tagName === 'INPUT') { inp = n; break; } }
+                }
             }
             if (!inp || inp.tagName !== 'INPUT') return {error: 'no input', tag: inp?.tagName};
             inp.focus();
