@@ -49,9 +49,33 @@ def _el_autocomplete(page, input_label: str, search_text: str):
 
 
 def _nav_dropdown_click(page, menu_title: str):
+    # 先打印页面状态帮助调试
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(3000)
+    print(f"  [DEBUG] 当前URL: {page.url}")
+    print(f"  [DEBUG] 页面标题: {page.title()}")
+
+    # 用 JS 查找所有包含目标文字的元素，打印候选
+    candidates = page.evaluate("""(title) => {
+        const all = document.querySelectorAll('span, a, li, button, div.el-menu-item');
+        const found = [];
+        for (const el of all) {
+            const text = el.textContent.trim();
+            if (text.includes(title) && text.length < 50) {
+                const r = el.getBoundingClientRect();
+                found.push({tag: el.tagName, text: text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0});
+            }
+        }
+        return found;
+    }""", menu_title)
+    print(f"  [DEBUG] 候选元素: {candidates}")
+
     toggle = page.locator(f".u-header__nav-link-toggle:has-text('{menu_title}')")
     if not toggle.count():
         toggle = page.locator(f"span:has-text('{menu_title}')").first
+    if not toggle.count():
+        # 更宽泛的查找
+        toggle = page.locator(f"a:has-text('{menu_title}'), li:has-text('{menu_title}'), div:has-text('{menu_title}')").first
     box = toggle.first.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
