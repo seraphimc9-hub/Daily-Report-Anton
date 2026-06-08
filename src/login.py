@@ -32,8 +32,20 @@ def login(browser: Browser, config: dict) -> bool:
     page.fill("#password", config["credentials"]["password"])
     page.click("input.btn-submit")
 
-    # 等待登录成功 —— 出现「阿米巴经营管理平台」
-    page.wait_for_selector("text=阿米巴经营管理平台", timeout=15000)
+    # 等待登录成功（国外服务器访问国内网站较慢，给 30 秒）
+    try:
+        page.wait_for_selector("text=阿米巴经营管理平台", timeout=30000)
+    except Exception:
+        # 失败时截图帮助排查
+        browser.screenshot("login_failed")
+        # 检查是否有错误提示
+        err = page.query_selector(".error, .alert-danger, [class*=error]")
+        if err:
+            raise Exception(f"登录失败: {err.inner_text()}")
+        # 检查当前 URL 是否还在登录页
+        if "login" in page.url:
+            raise Exception("登录失败: 仍在登录页面，请检查账号密码或网络")
+        raise Exception(f"登录超时: 当前URL={page.url}")
 
     # 保存登录态
     page.context.storage_state(path=str(STATE_FILE))
