@@ -160,6 +160,11 @@ def _fill_table_data(page, report_data: dict):
 def fill_report(browser: Browser, config: dict) -> bool:
     page = browser.page
 
+    # 等待页面完全加载（登录后 CAS 会重定向）
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(3000)
+    browser.screenshot("00_fill_start")
+
     # 1. 导航菜单 → 阿米巴数据填报
     _nav_dropdown_click(page, "阿米巴数据填报")
 
