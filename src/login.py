@@ -47,6 +47,10 @@ def login(browser: Browser, config: dict) -> bool:
             raise Exception("登录失败: 仍在登录页面，请检查账号密码或网络")
         raise Exception(f"登录超时: 当前URL={page.url}")
 
+    # 登录成功后，导航到目标页面确保完整菜单加载
+    page.goto(config["target"]["url"])
+    page.wait_for_load_state("networkidle")
+
     # 保存登录态
     page.context.storage_state(path=str(STATE_FILE))
     browser.storage_state = str(STATE_FILE)

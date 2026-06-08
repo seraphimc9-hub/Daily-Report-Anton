@@ -49,46 +49,28 @@ def _el_autocomplete(page, input_label: str, search_text: str):
 
 
 def _nav_dropdown_click(page, menu_title: str):
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(3000)
-
-    # 直接用 JS 查找所有包含目标文字（或关键词）的元素
-    keyword = "阿米巴"  # 先搜短关键词
-    result = page.evaluate("""(kw) => {
-        const all = document.querySelectorAll('*');
-        const found = [];
-        for (const el of all) {
-            if (el.children.length > 0) continue;  // 只要叶子节点
-            const t = (el.textContent || '').trim();
-            if (t.includes(kw) && t.length < 80) {
-                const r = el.getBoundingClientRect();
-                found.push({tag: el.tagName, cls: el.className?.substring(0,60)||'', text: t, w: r.width, h: r.height});
-            }
-        }
-        return found;
-    }""", keyword)
-    print(f"  [DEBUG] 含'{keyword}'的元素: {result[:20]}")
-
-    # 尝试直接点击任何包含完整目标文字的可见元素
-    target = None
-    for sel in [
-        f"span:has-text('{menu_title}')",
-        f"a:has-text('{menu_title}')",
-        f"li:has-text('{menu_title}')",
-        f"div:has-text('{menu_title}')",
-        f".el-menu-item:has-text('{menu_title}')",
-        f".el-submenu:has-text('{menu_title}')",
-    ]:
-        loc = page.locator(sel)
-        if loc.count():
-            target = loc.first
-            break
-
-    if target:
-        target.click()
+    toggle = page.locator(f".u-header__nav-link-toggle:has-text('{menu_title}')")
+    if not toggle.count():
+        toggle = page.locator(f"span:has-text('{menu_title}')").first
+    box = toggle.first.bounding_box()
+    if box:
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     else:
-        raise Exception(f"页面上找不到 '{menu_title}'，请检查菜单是否需要展开")
+        toggle.first.hover()
+    page.wait_for_timeout(1000)
 
+    item = page.locator(f"a.u-header__sub-menu-nav-link:has-text('{menu_title}')")
+    if not item.count():
+        item = page.locator(f".dropdown-menu a:has-text('{menu_title}')")
+    if not item.count():
+        item = page.locator(f"a:has-text('{menu_title}')").last
+    box = item.first.bounding_box()
+    if box:
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.wait_for_timeout(300)
+        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    else:
+        item.first.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
 
@@ -177,11 +159,6 @@ def _fill_table_data(page, report_data: dict):
 
 def fill_report(browser: Browser, config: dict) -> bool:
     page = browser.page
-
-    # 等待页面完全加载（登录后 CAS 会重定向）
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(3000)
-    browser.screenshot("00_fill_start")
 
     # 1. 导航菜单 → 阿米巴数据填报
     _nav_dropdown_click(page, "阿米巴数据填报")
