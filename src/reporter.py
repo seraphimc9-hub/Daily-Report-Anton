@@ -49,52 +49,46 @@ def _el_autocomplete(page, input_label: str, search_text: str):
 
 
 def _nav_dropdown_click(page, menu_title: str):
-    # 先打印页面状态帮助调试
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(3000)
-    print(f"  [DEBUG] 当前URL: {page.url}")
-    print(f"  [DEBUG] 页面标题: {page.title()}")
 
-    # 用 JS 查找所有包含目标文字的元素，打印候选
-    candidates = page.evaluate("""(title) => {
-        const all = document.querySelectorAll('span, a, li, button, div.el-menu-item');
+    # 直接用 JS 查找所有包含目标文字（或关键词）的元素
+    keyword = "阿米巴"  # 先搜短关键词
+    result = page.evaluate("""(kw) => {
+        const all = document.querySelectorAll('*');
         const found = [];
         for (const el of all) {
-            const text = el.textContent.trim();
-            if (text.includes(title) && text.length < 50) {
+            if (el.children.length > 0) continue;  // 只要叶子节点
+            const t = (el.textContent || '').trim();
+            if (t.includes(kw) && t.length < 80) {
                 const r = el.getBoundingClientRect();
-                found.push({tag: el.tagName, text: text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0});
+                found.push({tag: el.tagName, cls: el.className?.substring(0,60)||'', text: t, w: r.width, h: r.height});
             }
         }
         return found;
-    }""", menu_title)
-    print(f"  [DEBUG] 候选元素: {candidates}")
+    }""", keyword)
+    print(f"  [DEBUG] 含'{keyword}'的元素: {result[:20]}")
 
-    toggle = page.locator(f".u-header__nav-link-toggle:has-text('{menu_title}')")
-    if not toggle.count():
-        toggle = page.locator(f"span:has-text('{menu_title}')").first
-    if not toggle.count():
-        # 更宽泛的查找
-        toggle = page.locator(f"a:has-text('{menu_title}'), li:has-text('{menu_title}'), div:has-text('{menu_title}')").first
-    box = toggle.first.bounding_box()
-    if box:
-        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    else:
-        toggle.first.hover()
-    page.wait_for_timeout(1000)
+    # 尝试直接点击任何包含完整目标文字的可见元素
+    target = None
+    for sel in [
+        f"span:has-text('{menu_title}')",
+        f"a:has-text('{menu_title}')",
+        f"li:has-text('{menu_title}')",
+        f"div:has-text('{menu_title}')",
+        f".el-menu-item:has-text('{menu_title}')",
+        f".el-submenu:has-text('{menu_title}')",
+    ]:
+        loc = page.locator(sel)
+        if loc.count():
+            target = loc.first
+            break
 
-    item = page.locator(f"a.u-header__sub-menu-nav-link:has-text('{menu_title}')")
-    if not item.count():
-        item = page.locator(f".dropdown-menu a:has-text('{menu_title}')")
-    if not item.count():
-        item = page.locator(f"a:has-text('{menu_title}')").last
-    box = item.first.bounding_box()
-    if box:
-        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-        page.wait_for_timeout(300)
-        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    if target:
+        target.click()
     else:
-        item.first.click()
+        raise Exception(f"页面上找不到 '{menu_title}'，请检查菜单是否需要展开")
+
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
 
