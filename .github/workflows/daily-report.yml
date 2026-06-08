@@ -1,0 +1,52 @@
+name: 每日经营数据填报
+
+on:
+  schedule:
+    # 北京时间上午 9:00 = UTC 1:00
+    - cron: "0 1 * * *"
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          pip install playwright pyyaml requests
+          playwright install chromium --with-deps
+
+      - name: 生成配置
+        run: |
+          cat > config.yaml << 'EOF'
+          target:
+            url: "${{ secrets.TARGET_URL }}"
+            login_url: "${{ secrets.LOGIN_URL }}"
+          credentials:
+            username: "${{ secrets.USERNAME }}"
+            password: '${{ secrets.PASSWORD }}'
+          filter:
+            填报层级: "业务部"
+            填报单位: "集团 - 区域总部 - 全球新区 - 东南亚业务部"
+            阿米巴: "东南亚销售阿米巴"
+            币种: "USD"
+          report_data:
+            与人相关费用: 150
+            日常费用: 800
+            人力资源费用: 450
+          notify:
+            type: "webhook"
+            webhook_url: "${{ secrets.WEBHOOK_URL }}"
+          EOF
+
+      - name: 执行填报
+        run: python main.py
