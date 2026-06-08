@@ -33,8 +33,7 @@ def login(browser: Browser, config: dict) -> bool:
     page.click("input.btn-submit")
 
     # 等待登录成功 —— 出现「阿米巴经营管理平台」
-    page.wait_for_url("**/dcr?app=42#/dcrhome", timeout=15000)
-    page.wait_for_selector("text=阿米巴经营管理平台", timeout=10000)
+    page.wait_for_selector("text=阿米巴经营管理平台", timeout=15000)
 
     # 保存登录态
     page.context.storage_state(path=str(STATE_FILE))
