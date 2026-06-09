@@ -1,4 +1,5 @@
 screenshots/
 auth_state.json
+config.yaml
 __pycache__/
 *.pyc
