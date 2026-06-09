@@ -2,8 +2,8 @@ name: 每日经营数据填报
 
 on:
   schedule:
-    # 北京时间上午 9:00 = UTC 1:00
-    - cron: "0 1 * * *"
+    # 北京时间上午 9:13 = UTC 1:13（避开整点高峰）
+    - cron: "13 1 * * *"
   workflow_dispatch:  # 允许手动触发
 
 jobs:
