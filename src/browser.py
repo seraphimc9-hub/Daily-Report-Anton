@@ -24,7 +24,7 @@ class Browser:
         self._browser = self._playwright.chromium.launch(headless=self.headless)
 
         # 如果有登录态文件，恢复 cookies / localStorage
-        ctx_kwargs = {}
+        ctx_kwargs = {"viewport": {"width": 1920, "height": 1080}}
         if self.storage_state and os.path.exists(self.storage_state):
             ctx_kwargs["storage_state"] = self.storage_state
         self._context = self._browser.new_context(**ctx_kwargs)

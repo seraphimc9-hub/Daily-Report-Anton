@@ -83,79 +83,74 @@ def _fill_table_data(page, report_data: dict):
     today = str(datetime.now().day)
     values = list(report_data.values())
 
-    # 找 today 列头的 X 坐标
-    ths = page.locator("th").all()
-    col_x = None
-    for th in ths:
-        if th.inner_text().strip() == today:
-            b = th.bounding_box()
-            if b:
-                col_x = b["x"] + b["width"] / 2
-            break
-    if col_x is None:
-        raise Exception(f"未找到日期列: {today}")
-
-    # 找「七、销售费用」下方 3 行的 Y 坐标
-    result = page.evaluate("""() => {
-        const allDivs = document.querySelectorAll('.paddingLeftRight10px');
-        let sectionDiv = null;
-        for (const d of allDivs) {
-            if (d.textContent.trim().startsWith('七、销售费用')) {
-                sectionDiv = d; break;
+    # 一次 JS 调用完成所有操作：定位列 → 找行 → 按 X 坐标匹配 → 填值
+    result = page.evaluate("""([today, values]) => {
+        // 1. 找 today 列头的 X 坐标
+        const ths = document.querySelectorAll('th');
+        let colX = null;
+        for (const th of ths) {
+            if (th.textContent.trim() === today) {
+                const r = th.getBoundingClientRect();
+                colX = r.x + r.width / 2;
+                break;
             }
+        }
+        if (colX === null) return {error: 'column not found: ' + today};
+
+        // 2. 找「七、销售费用」并滚动到可见区域
+        const divs = document.querySelectorAll('.paddingLeftRight10px');
+        let sectionDiv = null;
+        for (const d of divs) {
+            if (d.textContent.trim().startsWith('七、销售费用')) { sectionDiv = d; break; }
         }
         if (!sectionDiv) return {error: 'section not found'};
         sectionDiv.scrollIntoView({block: 'center'});
+
+        // 3. 找 section 下方所有 input，按 Y 聚类成行
         const sectionY = sectionDiv.getBoundingClientRect().y;
-
-        const inputs = Array.from(document.querySelectorAll('input.el-input__inner'));
-        const belowInputs = [];
-        for (const inp of inputs) {
-            const r = inp.getBoundingClientRect();
-            if (r.y > sectionY + 5 && r.y < sectionY + 400)
-                belowInputs.push({y: Math.round(r.y)});
-        }
+        const allInputs = Array.from(document.querySelectorAll('input.el-input__inner'));
         const rows = [];
-        for (const inp of belowInputs) {
+        for (const inp of allInputs) {
+            const r = inp.getBoundingClientRect();
+            if (r.y <= sectionY + 5 || r.y >= sectionY + 400) continue;
             let found = false;
-            for (const row of rows) { if (Math.abs(row.y - inp.y) < 40) { found = true; break; } }
-            if (!found) rows.push(inp);
-        }
-        return {rowYs: rows.slice(0, 3).map(r => r.y)};
-    }""")
-
-    row_ys = result.get("rowYs", [])
-    if len(row_ys) < 3:
-        raise Exception(f"未找到足够的行: {result}")
-
-    # 用 elementFromPoint 命中每个 input 并填值
-    for i, ry in enumerate(row_ys):
-        if i >= len(values):
-            break
-        val = str(values[i])
-        r = page.evaluate("""([x, y, val]) => {
-            let inp = document.elementFromPoint(x, y);
-            if (!inp) return {error: 'no element'};
-            if (inp.tagName !== 'INPUT') {
-                // 可能在 td/div 内部，向下查找 input
-                const inside = inp.querySelector('input');
-                if (inside) { inp = inside; }
-                else {
-                    const nearby = document.elementsFromPoint(x, y);
-                    for (const n of nearby) { if (n.tagName === 'INPUT') { inp = n; break; } }
-                }
+            for (const row of rows) {
+                if (Math.abs(row.y - r.y) < 40) { row.inputs.push(inp); found = true; break; }
             }
-            if (!inp || inp.tagName !== 'INPUT') return {error: 'no input', tag: inp?.tagName};
-            inp.focus();
-            inp.value = '';
-            inp.dispatchEvent(new Event('input', {bubbles: true}));
-            inp.value = val;
-            inp.dispatchEvent(new Event('input', {bubbles: true}));
-            inp.dispatchEvent(new Event('change', {bubbles: true}));
-            return {ok: true, val};
-        }""", [col_x, ry, val])
-        if "error" in r:
-            raise Exception(f"填充第{i+1}行失败: {r}")
+            if (!found) rows.push({y: r.y, inputs: [inp]});
+        }
+        rows.sort((a, b) => a.y - b.y);
+        const targetRows = rows.slice(0, values.length);
+
+        // 4. 逐行找 X 坐标最接近 colX 的 input 并填值
+        const filled = [];
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, 'value'
+        ).set;
+        for (let i = 0; i < targetRows.length; i++) {
+            let bestInp = null, bestDist = Infinity;
+            for (const inp of targetRows[i].inputs) {
+                const dist = Math.abs(inp.getBoundingClientRect().x - colX);
+                if (dist < bestDist) { bestDist = dist; bestInp = inp; }
+            }
+            if (!bestInp) {
+                filled.push({row: i, error: 'no input in row'});
+                continue;
+            }
+            bestInp.focus();
+            nativeSetter.call(bestInp, String(values[i]));
+            bestInp.dispatchEvent(new Event('input', {bubbles: true}));
+            bestInp.dispatchEvent(new Event('change', {bubbles: true}));
+            filled.push({row: i, ok: true});
+        }
+        return {filled};
+    }""", [today, values])
+
+    if "error" in result:
+        raise Exception(f"填充失败: {result['error']}")
+    for f in result.get("filled", []):
+        if "error" in f:
+            raise Exception(f"填充第{f['row']+1}行失败: {f}")
 
 
 # ============================================================
